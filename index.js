@@ -1,14 +1,17 @@
 const http = require('http');
 const url = require('url');
 let [uri, delay, method] = process.argv.slice(2);
+
 const fail = err => {
-	console.error('err', err.message);
+	if (err) {
+		console.error('err', err.message);
+	}
 	process.exit(1);
 };
-const dumpHeaders = (req, res) => {
+
+const dumpHeaders = res => {
 	const stringify = obj => JSON.stringify(obj.headers, 2, null);
 	if (process.env.HEADERS == 1) {
-		console.log('request headers:', stringify(req));
 		console.log('response headers:', stringify(res));
 	} else {
 		console.log('response header connection:', res.headers.connection);
@@ -31,7 +34,7 @@ const agent = new http.Agent({
 });
 
 const call = n => new Promise((resolve, reject) => {
-	const req = {
+	const opts = {
 		hostname: parsedURI.hostname,
 	  port: parsedURI.port,
 	  path: parsedURI.path,
@@ -39,13 +42,17 @@ const call = n => new Promise((resolve, reject) => {
 		agent: agent
 	};
 
-	const cb = res => {
-		dumpHeaders(req, res);
+	const handler = res => {
+		dumpHeaders(res);
 		let data = '';
 		res
 			.on('error', reject)
+			.on('close', reject)
 			.on('data', chunk => data += chunk)
 			.on('end', () => {
+				if (!res.complete) {
+					return reject(new Error('connection terminated prematurely'));
+				}
 				console.log(`request ${ n } done. response: ${ data }`);
 				resolve();
 			});
@@ -53,14 +60,16 @@ const call = n => new Promise((resolve, reject) => {
 
 	console.log(`request ${ n } start`);
 
-	http.request(req, cb)
+	http.request(opts)
+		.on('timeout', reject)
 		.on('error', reject)
+		.on('response', handler)
 		.end();
 });
 
 call(1)
 	.then(() => {
 		console.log(`time to kill the server.. you have ${ delay }ms until next request`);
-		return setTimeout(() => call(2), delay);
+		return setTimeout(() => call(2).catch(fail), delay);
 	})
 	.catch(fail);
