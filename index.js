@@ -16,6 +16,16 @@ if (!delay) {
 
 const parsedURI = url.parse(uri);
 
+const dumpHeaders = (req, res) => {
+	const stringify = obj => JSON.stringify(obj.headers, 2, null);
+	if (process.env.HEADERS == 1) {
+		console.log('request headers:', stringify(req));
+		console.log('response headers:', stringify(res));
+	} else {
+		console.log('response header connection:', res.headers.connection);
+	}
+};
+
 const agent = new http.Agent({
 	keepAlive: true,
 	keepAliveMsecs: 30000 // 30s
@@ -31,7 +41,7 @@ const makeRequest = cb => {
 	};
 
 	http.request(req, res => {
-		console.log('response header connection:', res.headers.connection);
+		dumpHeaders(req, res);
 
 		let data = '';
 		res
